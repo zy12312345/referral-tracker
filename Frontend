@@ -1,0 +1,26 @@
+// ReferralForm.jsx
+import { useState } from 'react';
+import axios from 'axios';
+
+export default function ReferralForm({ dentistId }) {
+  const [patientName, setPatientName] = useState('');
+  const [reason, setReason] = useState('');
+
+  const handleSubmit = async () => {
+    await axios.post('http://localhost:5000/referrals', {
+      dentistId,
+      patientName,
+      reason
+    });
+    alert('Referral sent!');
+  };
+
+  return (
+    <div>
+      <h2>Send Referral</h2>
+      <input placeholder="Patient Name" onChange={(e) => setPatientName(e.target.value)} />
+      <input placeholder="Reason" onChange={(e) => setReason(e.target.value)} />
+      <button onClick={handleSubmit}>Submit</button>
+    </div>
+  );
+}
