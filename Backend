@@ -1,0 +1,41 @@
+// server.js
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+mongoose.connect('mongodb://localhost:27017/referral_tracker', {
+  useNewUrlParser: true, useUnifiedTopology: true,
+});
+
+const Referral = mongoose.model('Referral', {
+  dentistId: String,
+  patientName: String,
+  reason: String,
+  status: { type: String, default: 'Pending' },
+  date: { type: Date, default: Date.now }
+});
+
+app.post('/referrals', async (req, res) => {
+  const referral = new Referral(req.body);
+  await referral.save();
+  res.send(referral);
+});
+
+app.get('/referrals/:dentistId', async (req, res) => {
+  const referrals = await Referral.find({ dentistId: req.params.dentistId });
+  res.send(referrals);
+});
+
+app.patch('/referrals/:id/status', async (req, res) => {
+  const updated = await Referral.findByIdAndUpdate(
+    req.params.id,
+    { status: req.body.status },
+    { new: true }
+  );
+  res.send(updated);
+});
+
+app.listen(5000, () => console.log('Server running on port 5000'));
