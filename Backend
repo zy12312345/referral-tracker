@@ -1,15 +1,20 @@
 // server.js
+require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 const cors = require('cors');
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-mongoose.connect('mongodb://localhost:27017/referral_tracker', {
-  useNewUrlParser: true, useUnifiedTopology: true,
-});
+mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
 
+const User = mongoose.model('User', new mongoose.Schema({
+  dentistId: { type: String, unique: true, required: true },
+  passwordHash: String
+}));
 const Referral = mongoose.model('Referral', {
   dentistId: String,
   patientName: String,
@@ -18,24 +23,51 @@ const Referral = mongoose.model('Referral', {
   date: { type: Date, default: Date.now }
 });
 
-app.post('/referrals', async (req, res) => {
-  const referral = new Referral(req.body);
+function authMiddleware(req, res, next) {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Not authorized' });
+  jwt.verify(token, process.env.JWT_SECRET, (err, payload) => {
+    if (err) return res.status(403).json({ error: 'Invalid token' });
+    req.dentistId = payload.dentistId;
+    next();
+  });
+}
+
+// Auth routes
+app.post('/auth/signup', async (req, res) => {
+  const { dentistId, password } = req.body;
+  const passwordHash = await bcrypt.hash(password, 10);
+  const user = new User({ dentistId, passwordHash });
+  await user.save();
+  res.json({ message: 'Dentist registered' });
+});
+
+app.post('/auth/login', async (req, res) => {
+  const { dentistId, password } = req.body;
+  const user = await User.findOne({ dentistId });
+  if (!user || !await bcrypt.compare(password, user.passwordHash)) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+  const token = jwt.sign({ dentistId }, process.env.JWT_SECRET, { expiresIn: '1h' });
+  res.json({ token });
+});
+
+// Referral routes
+app.post('/referrals', authMiddleware, async (req, res) => {
+  const referral = new Referral({ ...req.body, dentistId: req.dentistId });
   await referral.save();
-  res.send(referral);
+  res.json(referral);
 });
 
-app.get('/referrals/:dentistId', async (req, res) => {
-  const referrals = await Referral.find({ dentistId: req.params.dentistId });
-  res.send(referrals);
+app.get('/referrals', authMiddleware, async (req, res) => {
+  const referrals = await Referral.find({ dentistId: req.dentistId });
+  res.json(referrals);
 });
 
-app.patch('/referrals/:id/status', async (req, res) => {
-  const updated = await Referral.findByIdAndUpdate(
-    req.params.id,
-    { status: req.body.status },
-    { new: true }
-  );
-  res.send(updated);
+app.patch('/referrals/:id/status', authMiddleware, async (req, res) => {
+  // Only you should update referrals: you can validate admin elsewhere or check a flag
+  const updated = await Referral.findByIdAndUpdate(req.params.id, { status: req.body.status }, { new: true });
+  res.json(updated);
 });
 
-app.listen(5000, () => console.log('Server running on port 5000'));
+app.listen(process.env.PORT || 5000, () => console.log('API running'));
