@@ -1,0 +1,24 @@
+// ReferralList.jsx
+import { useEffect, useState } from 'react';
+import axios from 'axios';
+
+export default function ReferralList({ dentistId }) {
+  const [referrals, setReferrals] = useState([]);
+
+  useEffect(() => {
+    axios.get(`http://localhost:5000/referrals/${dentistId}`).then(res => {
+      setReferrals(res.data);
+    });
+  }, [dentistId]);
+
+  return (
+    <div>
+      <h2>Your Referrals</h2>
+      <ul>
+        {referrals.map(r => (
+          <li key={r._id}>{r.patientName} - {r.status}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
